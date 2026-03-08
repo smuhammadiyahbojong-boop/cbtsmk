@@ -124,11 +124,11 @@
 
         function tampilkanSoal(idx) {
             indexSoalSaatIni = idx;
-            let s = bankSoal[idx], j = jawabanSiswa[s.id_soal] || "";
+            let s = bankSoal[idx], j = jawabanSiswa[s.id_soal.toString()] || "";
             let imgQ = s.link_gambar ? `<img src="${s.link_gambar}" style="max-width:100%; margin-bottom:15px;">` : "";
             const renderOpsi = (label, teks, img) => `
                 <label class="opsi-jawaban">
-                    <input type="radio" name="q" onchange="jawabanSiswa['${s.id_soal}']='${label}'" ${j===label?'checked':''}> 
+                    <input type="radio" name="q" onchange="simpanPilihan('${s.id_soal}', '${label}')" ${j===label?'checked':''}> 
                     <b>${label}.</b> ${teks}
                     ${img ? `<img src="${img}" class="img-opsi">` : ""}
                 </label>`;
@@ -144,14 +144,26 @@
             btn.onclick = idx === bankSoal.length-1 ? konfirmasiSelesai : () => tampilkanSoal(idx+1);
         }
 
-        function konfirmasiSelesai() {
-            let totalSoal = bankSoal.length, sudahDijawab = Object.keys(jawabanSiswa).length, belumDijawab = [];
-            for (let i = 0; i < totalSoal; i++) { if (!jawabanSiswa[bankSoal[i].id_soal]) belumDijawab.push(i + 1); }
+        function simpanPilihan(idSoal, label) {
+            jawabanSiswa[idSoal.toString()] = label;
+        }
 
-            if (sudahDijawab < totalSoal) {
-                alert(`⚠️ BELUM LENGKAP!\nMasih ada ${totalSoal - sudahDijawab} soal kosong.\nNomor: ${belumDijawab.join(", ")}`);
+        function konfirmasiSelesai() {
+            let belumDijawab = [];
+            bankSoal.forEach((soal, index) => {
+                let id = soal.id_soal.toString();
+                if (!jawabanSiswa[id]) {
+                    belumDijawab.push(index + 1);
+                }
+            });
+
+            if (belumDijawab.length > 0) {
+                alert(`⚠️ BELUM LENGKAP!\n\nMasih ada ${belumDijawab.length} soal yang belum dijawab.\nNomor Soal: ${belumDijawab.join(", ")}\n\nSilakan cek kembali.`);
             } else {
-                if (confirm("Yakin ingin mengirim jawaban sekarang?")) { clearInterval(timerInterval); kirimJawaban(); }
+                if (confirm("Yakin ingin mengirim jawaban sekarang?")) { 
+                    clearInterval(timerInterval); 
+                    kirimJawaban(); 
+                }
             }
         }
 

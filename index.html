@@ -5,12 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CBT Ujian SMK</title>
     <style>
-        /* TAMBAHAN ANTI-COPY: user-select: none membuat teks tidak bisa diblok */
+        /* ANTI-COPY: Teks tidak bisa diblok */
         body { 
             font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; flex-direction: column; 
             user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
         }
-        
         .kotak { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
         .kotak-login { max-width: 350px; text-align: center; }
         input[type="text"], select { box-sizing: border-box; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
@@ -67,38 +66,33 @@
     </div>
 
     <script>
-        // ================= SISTEM KEAMANAN (ANTI-CHEAT) =================
-        // 1. Matikan fungsi Klik Kanan
-        document.addEventListener('contextmenu', event => {
-            event.preventDefault();
-            alert("Sistem Keamanan CBT: Dilarang melakukan klik kanan!");
-        });
+        // ================= PENGATURAN JADWAL UJIAN =================
+        // Mas Dwi bisa ganti jam buka dan jam tutup di bawah ini:
+        // Format Waktu Wajib: "HH:MM" (contoh: "07:30", "08:45", "15:00")
+        const jadwalUjian = {
+            "Informatika": { buka: "20:03", tutup: "23:59" },
+            "Broadcasting": { buka: "20:08", tutup: "23:59" },
+            "Coding": { buka: "20:10", tutup: "23:59" }
+        };
 
-        // 2. Matikan fungsi Copy/Paste keyboard (Ctrl+C)
-        document.addEventListener('copy', event => {
-            event.preventDefault();
-            alert("Sistem Keamanan CBT: Dilarang menyalin soal!");
-        });
-
-        // 3. Sensor Tab Switching (Deteksi kalau buka Google/tab lain)
+        // ================= SISTEM KEAMANAN =================
+        // Matikan Klik Kanan
+        document.addEventListener('contextmenu', event => { event.preventDefault(); alert("Sistem Keamanan CBT: Dilarang klik kanan!"); });
+        // Matikan Copy/Paste
+        document.addEventListener('copy', event => { event.preventDefault(); alert("Sistem Keamanan CBT: Dilarang menyalin soal!"); });
+        // Sensor Pindah Tab
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === 'hidden' && document.getElementById("halaman-ujian").style.display === "block") {
-                alert("⚠️ PERINGATAN PELANGGARAN! ⚠️\n\nAnda terdeteksi keluar dari layar ujian (membuka tab/aplikasi lain). Segala aktivitas Anda direkam oleh sistem pengawas!");
+                alert("⚠️ PERINGATAN PELANGGARAN! ⚠️\n\nAnda terdeteksi keluar dari layar ujian. Segala aktivitas direkam!");
             }
         });
-
 
         // URL API MAS DWI
         const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
 
-        let bankSoal = [];
-        let indexSoalSaatIni = 0;
-        let jawabanSiswa = {}; 
-        let nisSiswaAktif = ""; 
-        let mapelAktif = ""; 
-        
-        // Variabel Timer
-        let durasiUjian = 60 * 60; // 60 menit dalam satuan detik
+        let bankSoal = []; let indexSoalSaatIni = 0; let jawabanSiswa = {}; 
+        let nisSiswaAktif = ""; let mapelAktif = ""; 
+        let durasiUjian = 60 * 60; // Durasi ujian per siswa: 60 menit (dalam detik)
         let timerInterval;
 
         function prosesLogin() {
@@ -108,6 +102,27 @@
             let pesan = document.getElementById("pesan");
 
             if(nis === "" || token === "") { pesan.style.color = "red"; pesan.innerText = "NIS & Token wajib diisi!"; return; }
+
+            // --- CEK JADWAL UJIAN DULU ---
+            let waktuSekarang = new Date();
+            let jam = waktuSekarang.getHours().toString().padStart(2, '0');
+            let menit = waktuSekarang.getMinutes().toString().padStart(2, '0');
+            let jamSekarangFormat = jam + ":" + menit; // Menghasilkan misal "08:15"
+
+            let jadwal = jadwalUjian[mapel];
+            if(jadwal) {
+                if(jamSekarangFormat < jadwal.buka) {
+                    pesan.style.color = "red";
+                    pesan.innerText = `Ujian ${mapel} baru dibuka pukul ${jadwal.buka} WIB!`;
+                    return; // Stop, jangan masuk
+                }
+                if(jamSekarangFormat > jadwal.tutup) {
+                    pesan.style.color = "red";
+                    pesan.innerText = `Ujian ${mapel} sudah ditutup pada pukul ${jadwal.tutup} WIB!`;
+                    return; // Stop, jangan masuk
+                }
+            }
+            // -----------------------------
 
             pesan.style.color = "blue"; pesan.innerText = "Memverifikasi data...";
 
@@ -130,37 +145,29 @@
             document.getElementById("info-siswa").innerText = `Siswa: ${nama} (${kelas})`;
             document.getElementById("judul-mapel").innerText = `UJIAN ${mapel.toUpperCase()}`;
             
-            jalankanTimer(); // Mulai hitung mundur
+            jalankanTimer(); // Durasi 60 menit mulai jalan
             tarikDataSoal();
         }
 
         function jalankanTimer() {
             let elemenWaktu = document.getElementById("waktu-ujian");
-            
             timerInterval = setInterval(() => {
                 durasiUjian--;
+                let menitTampil = Math.floor(durasiUjian / 60);
+                let detikTampil = durasiUjian % 60;
+                elemenWaktu.innerText = `${menitTampil.toString().padStart(2, '0')}:${detikTampil.toString().padStart(2, '0')}`;
                 
-                let menit = Math.floor(durasiUjian / 60);
-                let detik = durasiUjian % 60;
-                
-                // Tambahkan angka 0 di depan jika di bawah 10 (misal: 09:05)
-                elemenWaktu.innerText = `${menit.toString().padStart(2, '0')}:${detik.toString().padStart(2, '0')}`;
-                
-                // Peringatan jika sisa 5 menit
                 if(durasiUjian === 300) {
-                    elemenWaktu.style.backgroundColor = "#ffc107"; // Kuning
-                    elemenWaktu.style.color = "#000";
+                    elemenWaktu.style.backgroundColor = "#ffc107"; elemenWaktu.style.color = "#000";
                     alert("Waktu ujian tersisa 5 MENIT lagi!");
                 }
-
-                // Jika waktu habis
                 if(durasiUjian <= 0) {
                     clearInterval(timerInterval);
                     elemenWaktu.innerText = "HABIS";
                     alert("WAKTU UJIAN HABIS! Sistem akan menyimpan jawaban Anda secara otomatis.");
-                    kirimJawabanKeServer(); // Paksa kirim
+                    kirimJawabanKeServer();
                 }
-            }, 1000); // Hitung mundur setiap 1000 milidetik (1 detik)
+            }, 1000);
         }
 
         function tarikDataSoal() {
@@ -176,8 +183,7 @@
         }
 
         function tampilkanSoal(index) {
-            let soal = bankSoal[index];
-            let nomorSoal = index + 1;
+            let soal = bankSoal[index]; let nomorSoal = index + 1;
             let jawabanTersimpan = jawabanSiswa[soal.id_soal] || "";
             let tagGambar = (soal.link_gambar && soal.link_gambar.trim() !== "") ? `<img src="${soal.link_gambar}" alt="Gambar Soal" style="max-width: 100%; border-radius: 5px; margin-bottom: 15px;">` : "";
 
@@ -193,11 +199,8 @@
                     <label class="opsi-jawaban"><input type="radio" name="opsi" value="E" onchange="simpanJawaban('${soal.id_soal}', 'E')" ${jawabanTersimpan === 'E' ? 'checked' : ''}> <b>E.</b> ${soal.pil_e}</label>
                 </div>
             `;
-            
             document.getElementById("area-soal").innerHTML = htmlSoal;
-
-            let btnPrev = document.getElementById("btn-prev");
-            let btnNext = document.getElementById("btn-next");
+            let btnPrev = document.getElementById("btn-prev"); let btnNext = document.getElementById("btn-next");
             btnPrev.style.visibility = (index === 0) ? "hidden" : "visible";
 
             if(index === bankSoal.length - 1) {
@@ -212,11 +215,8 @@
 
         function konfirmasiSelesai() {
             let totalDijawab = Object.keys(jawabanSiswa).length;
-            let pesanConfirm = `Anda sudah menjawab ${totalDijawab} dari ${bankSoal.length} soal.\n\nYakin ingin mengakhiri dan mengirim jawaban?`;
-            
-            if(confirm(pesanConfirm)) {
-                clearInterval(timerInterval); // Matikan timer
-                kirimJawabanKeServer();
+            if(confirm(`Anda sudah menjawab ${totalDijawab} dari ${bankSoal.length} soal.\n\nYakin ingin mengakhiri dan mengirim jawaban?`)) {
+                clearInterval(timerInterval); kirimJawabanKeServer();
             }
         }
 

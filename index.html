@@ -69,13 +69,14 @@
     </div>
 
     <script>
-        // 1. MASUKKAN URL APPS SCRIPT MAS DWI DI SINI
-        const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec"; // Ganti dengan URL yang baru!
+        // URL API milik Mas Dwi (Sudah Terpasang)
+        const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
 
-        // Variabel Global untuk menyimpan data ujian
+        // Variabel Global
         let bankSoal = [];
         let indexSoalSaatIni = 0;
-        let jawabanSiswa = {}; // Format: { "ID-1": "A", "ID-2": "C" }
+        let jawabanSiswa = {}; 
+        let nisSiswaAktif = ""; // Menyimpan NIS siswa yang sedang login
 
         // ================= FITUR LOGIN =================
         function prosesLogin() {
@@ -92,11 +93,12 @@
             .then(data => {
                 if(data.status === "sukses") {
                     pesan.style.color = "green"; pesan.innerText = "Berhasil masuk!";
+                    nisSiswaAktif = nis; // Simpan NIS untuk dikirim saat selesai ujian
                     setTimeout(() => { bukaUjian(data.data.nama, data.data.kelas); }, 1000);
                 } else {
                     pesan.style.color = "red"; pesan.innerText = data.pesan;
                 }
-            }).catch(err => { pesan.style.color = "red"; pesan.innerText = "Error koneksi server."; });
+            }).catch(err => { pesan.style.color = "red"; pesan.innerText = "Error koneksi server."; console.error(err); });
         }
 
         // ================= FITUR UJIAN =================
@@ -112,30 +114,25 @@
             .then(res => res.json())
             .then(data => {
                 if(data.status === "sukses" && data.data.length > 0) {
-                    bankSoal = data.data; // Simpan soal ke memori
-                    document.getElementById("area-navigasi").style.display = "flex"; // Munculkan tombol navigasi
-                    tampilkanSoal(0); // Tampilkan soal nomor 1 (index 0)
+                    bankSoal = data.data; 
+                    document.getElementById("area-navigasi").style.display = "flex"; 
+                    tampilkanSoal(0); 
                 } else {
                     document.getElementById("area-soal").innerHTML = "Gagal memuat soal atau bank soal kosong.";
                 }
             }).catch(err => { document.getElementById("area-soal").innerHTML = "Gagal menghubungi server soal."; });
         }
 
-        // Fungsi mencetak HTML soal ke layar
         function tampilkanSoal(index) {
             let soal = bankSoal[index];
             let nomorSoal = index + 1;
-            
-            // Cek apakah siswa sudah punya jawaban untuk soal ini
             let jawabanTersimpan = jawabanSiswa[soal.id_soal] || "";
 
-            // Cek apakah ada gambar
             let tagGambar = "";
             if(soal.link_gambar && soal.link_gambar.trim() !== "") {
                 tagGambar = `<img src="${soal.link_gambar}" alt="Gambar Soal" style="max-width: 100%; border-radius: 5px; margin-bottom: 15px;">`;
             }
 
-            // Template HTML untuk soal dan pilihan ganda
             let htmlSoal = `
                 <div style="margin-bottom: 20px;">
                     <span style="background: #007bff; color: white; padding: 3px 10px; border-radius: 15px; font-weight: bold; font-size: 14px;">SOAL NO. ${nomorSoal}</span>
@@ -152,17 +149,13 @@
                 </div>
             `;
             
-            // Masukkan ke area HTML
             document.getElementById("area-soal").innerHTML = htmlSoal;
 
-            // Atur Tombol Navigasi
             let btnPrev = document.getElementById("btn-prev");
             let btnNext = document.getElementById("btn-next");
 
-            // Sembunyikan tombol "Sebelumnya" kalau di soal pertama
             btnPrev.style.visibility = (index === 0) ? "hidden" : "visible";
 
-            // Ubah tombol "Selanjutnya" jadi "Selesai" kalau di soal terakhir
             if(index === bankSoal.length - 1) {
                 btnNext.innerText = "SELESAI UJIAN";
                 btnNext.className = "btn-nav btn-selesai";
@@ -181,18 +174,53 @@
 
         function simpanJawaban(idSoal, pilihan) {
             jawabanSiswa[idSoal] = pilihan;
-            console.log("Jawaban sementara:", jawabanSiswa); // Bisa dicek di Inspect > Console
         }
 
+        // ================= FITUR SUBMIT NILAI =================
         function konfirmasiSelesai() {
             let totalDijawab = Object.keys(jawabanSiswa).length;
             let totalSoal = bankSoal.length;
             
-            let pesanConfirm = `Anda sudah menjawab ${totalDijawab} dari ${totalSoal} soal.\n\nYakin ingin mengakhiri ujian ini?`;
+            let pesanConfirm = `Anda sudah menjawab ${totalDijawab} dari ${totalSoal} soal.\n\nYakin ingin mengakhiri dan mengirim jawaban?`;
             
             if(confirm(pesanConfirm)) {
-                alert("Sistem pengiriman nilai ke Google Sheets akan kita buat di tahap selanjutnya!");
-                // Nanti kita akan tambahkan fungsi fetch() untuk mengirim nilai di sini
+                let btnSelesai = document.getElementById("btn-next");
+                btnSelesai.innerText = "Mengirim...";
+                btnSelesai.disabled = true;
+
+                // Mengubah format jawaban agar bisa dikirim via URL (GET Method)
+                let jawabanBentukTeks = encodeURIComponent(JSON.stringify(jawabanSiswa));
+
+                fetch(URL_API + "?action=submit&nis=" + nisSiswaAktif + "&jawaban=" + jawabanBentukTeks, {
+                    method: 'GET',
+                    redirect: 'follow'
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if(data.status === "sukses") {
+                        // Tampilan jika sukses masuk ke server
+                        document.getElementById("area-soal").innerHTML = `
+                            <div style="text-align:center; padding: 40px 0;">
+                                <h2 style="color: #28a745;">UJIAN SELESAI</h2>
+                                <p>Jawaban Anda telah berhasil tersimpan di server.</p>
+                                <p>Silakan tinggalkan ruangan lab.</p>
+                            </div>
+                        `;
+                        document.getElementById("area-navigasi").style.display = "none";
+                        document.getElementById("waktu-ujian").innerText = "SELESAI";
+                        document.getElementById("waktu-ujian").style.backgroundColor = "#d4edda";
+                        document.getElementById("waktu-ujian").style.color = "#155724";
+                    } else {
+                        alert("Gagal menyimpan data: " + data.pesan);
+                        btnSelesai.innerText = "SELESAI UJIAN";
+                        btnSelesai.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    alert("Terjadi kesalahan koneksi saat mengirim jawaban. Coba klik lagi.");
+                    btnSelesai.innerText = "SELESAI UJIAN";
+                    btnSelesai.disabled = false;
+                });
             }
         }
     </script>

@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CBT Ujian SMK</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; flex-direction: column; }
+        /* TAMBAHAN ANTI-COPY: user-select: none membuat teks tidak bisa diblok */
+        body { 
+            font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; flex-direction: column; 
+            user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+        }
+        
         .kotak { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 100%; box-sizing: border-box; }
         .kotak-login { max-width: 350px; text-align: center; }
         input[type="text"], select { box-sizing: border-box; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
@@ -62,6 +67,27 @@
     </div>
 
     <script>
+        // ================= SISTEM KEAMANAN (ANTI-CHEAT) =================
+        // 1. Matikan fungsi Klik Kanan
+        document.addEventListener('contextmenu', event => {
+            event.preventDefault();
+            alert("Sistem Keamanan CBT: Dilarang melakukan klik kanan!");
+        });
+
+        // 2. Matikan fungsi Copy/Paste keyboard (Ctrl+C)
+        document.addEventListener('copy', event => {
+            event.preventDefault();
+            alert("Sistem Keamanan CBT: Dilarang menyalin soal!");
+        });
+
+        // 3. Sensor Tab Switching (Deteksi kalau buka Google/tab lain)
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === 'hidden' && document.getElementById("halaman-ujian").style.display === "block") {
+                alert("⚠️ PERINGATAN PELANGGARAN! ⚠️\n\nAnda terdeteksi keluar dari layar ujian (membuka tab/aplikasi lain). Segala aktivitas Anda direkam oleh sistem pengawas!");
+            }
+        });
+
+
         // URL API MAS DWI
         const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
 
@@ -70,6 +96,10 @@
         let jawabanSiswa = {}; 
         let nisSiswaAktif = ""; 
         let mapelAktif = ""; 
+        
+        // Variabel Timer
+        let durasiUjian = 60 * 60; // 60 menit dalam satuan detik
+        let timerInterval;
 
         function prosesLogin() {
             let nis = document.getElementById("nis").value;
@@ -99,7 +129,38 @@
             document.getElementById("halaman-ujian").style.display = "block";
             document.getElementById("info-siswa").innerText = `Siswa: ${nama} (${kelas})`;
             document.getElementById("judul-mapel").innerText = `UJIAN ${mapel.toUpperCase()}`;
+            
+            jalankanTimer(); // Mulai hitung mundur
             tarikDataSoal();
+        }
+
+        function jalankanTimer() {
+            let elemenWaktu = document.getElementById("waktu-ujian");
+            
+            timerInterval = setInterval(() => {
+                durasiUjian--;
+                
+                let menit = Math.floor(durasiUjian / 60);
+                let detik = durasiUjian % 60;
+                
+                // Tambahkan angka 0 di depan jika di bawah 10 (misal: 09:05)
+                elemenWaktu.innerText = `${menit.toString().padStart(2, '0')}:${detik.toString().padStart(2, '0')}`;
+                
+                // Peringatan jika sisa 5 menit
+                if(durasiUjian === 300) {
+                    elemenWaktu.style.backgroundColor = "#ffc107"; // Kuning
+                    elemenWaktu.style.color = "#000";
+                    alert("Waktu ujian tersisa 5 MENIT lagi!");
+                }
+
+                // Jika waktu habis
+                if(durasiUjian <= 0) {
+                    clearInterval(timerInterval);
+                    elemenWaktu.innerText = "HABIS";
+                    alert("WAKTU UJIAN HABIS! Sistem akan menyimpan jawaban Anda secara otomatis.");
+                    kirimJawabanKeServer(); // Paksa kirim
+                }
+            }, 1000); // Hitung mundur setiap 1000 milidetik (1 detik)
         }
 
         function tarikDataSoal() {
@@ -154,31 +215,36 @@
             let pesanConfirm = `Anda sudah menjawab ${totalDijawab} dari ${bankSoal.length} soal.\n\nYakin ingin mengakhiri dan mengirim jawaban?`;
             
             if(confirm(pesanConfirm)) {
-                let btnSelesai = document.getElementById("btn-next");
-                btnSelesai.innerText = "Mengirim..."; btnSelesai.disabled = true;
-
-                let jawabanBentukTeks = encodeURIComponent(JSON.stringify(jawabanSiswa));
-
-                fetch(URL_API + "?action=submit&nis=" + nisSiswaAktif + "&mapel=" + mapelAktif + "&jawaban=" + jawabanBentukTeks, { method: 'GET', redirect: 'follow' })
-                .then(res => res.json())
-                .then(data => {
-                    if(data.status === "sukses") {
-                        document.getElementById("area-soal").innerHTML = `
-                            <div style="text-align:center; padding: 40px 0;">
-                                <h2 style="color: #28a745;">UJIAN SELESAI</h2>
-                                <p>Jawaban mapel <b>${mapelAktif}</b> berhasil tersimpan.</p>
-                                <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; background:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">Kembali ke Login</button>
-                            </div>
-                        `;
-                        document.getElementById("area-navigasi").style.display = "none";
-                        document.getElementById("waktu-ujian").innerText = "SELESAI";
-                    } else {
-                        alert("Gagal menyimpan: " + data.pesan); btnSelesai.innerText = "SELESAI UJIAN"; btnSelesai.disabled = false;
-                    }
-                }).catch(err => {
-                    alert("Terjadi kesalahan koneksi."); btnSelesai.innerText = "SELESAI UJIAN"; btnSelesai.disabled = false;
-                });
+                clearInterval(timerInterval); // Matikan timer
+                kirimJawabanKeServer();
             }
+        }
+
+        function kirimJawabanKeServer() {
+            let btnSelesai = document.getElementById("btn-next");
+            if(btnSelesai) { btnSelesai.innerText = "Mengirim..."; btnSelesai.disabled = true; }
+
+            let jawabanBentukTeks = encodeURIComponent(JSON.stringify(jawabanSiswa));
+
+            fetch(URL_API + "?action=submit&nis=" + nisSiswaAktif + "&mapel=" + mapelAktif + "&jawaban=" + jawabanBentukTeks, { method: 'GET', redirect: 'follow' })
+            .then(res => res.json())
+            .then(data => {
+                if(data.status === "sukses") {
+                    document.getElementById("area-soal").innerHTML = `
+                        <div style="text-align:center; padding: 40px 0;">
+                            <h2 style="color: #28a745;">UJIAN SELESAI</h2>
+                            <p>Jawaban mapel <b>${mapelAktif}</b> berhasil tersimpan.</p>
+                            <button onclick="location.reload()" style="margin-top:20px; padding:10px 20px; background:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">Kembali ke Login</button>
+                        </div>
+                    `;
+                    document.getElementById("area-navigasi").style.display = "none";
+                    document.getElementById("waktu-ujian").innerText = "SELESAI";
+                } else {
+                    alert("Gagal menyimpan: " + data.pesan); if(btnSelesai) { btnSelesai.innerText = "SELESAI UJIAN"; btnSelesai.disabled = false; }
+                }
+            }).catch(err => {
+                alert("Terjadi kesalahan koneksi."); if(btnSelesai) { btnSelesai.innerText = "SELESAI UJIAN"; btnSelesai.disabled = false; }
+            });
         }
     </script>
 </body>

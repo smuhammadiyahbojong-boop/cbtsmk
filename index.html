@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CBT Ujian SMK</title>
     <style>
-        /* ANTI-COPY: Teks tidak bisa diblok */
         body { 
             font-family: Arial, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; flex-direction: column; 
             user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
@@ -14,38 +13,26 @@
         .kotak-login { max-width: 350px; text-align: center; }
         input[type="text"], select { box-sizing: border-box; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
         .btn-utama { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .btn-utama:hover { background-color: #218838; }
-        #pesan { margin-top: 15px; font-size: 14px; font-weight: bold; }
         .kotak-ujian { max-width: 800px; display: none; }
         .header-ujian { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; align-items: center; }
-        .identitas h3 { margin: 0 0 5px 0; color: #333; }
-        .identitas p { margin: 0; color: #666; font-size: 14px; }
         .timer { font-size: 28px; font-weight: bold; color: #dc3545; background: #ffeeba; padding: 5px 15px; border-radius: 5px; }
-        #area-soal { font-size: 16px; line-height: 1.6; color: #333; }
-        .opsi-jawaban { display: block; background: #f8f9fa; padding: 10px 15px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; cursor: pointer; transition: 0.2s; }
-        .opsi-jawaban:hover { background: #e9ecef; }
-        .opsi-jawaban input { margin-right: 10px; cursor: pointer; transform: scale(1.2); }
+        .opsi-jawaban { display: block; background: #f8f9fa; padding: 10px 15px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ddd; cursor: pointer; }
+        .img-opsi { display: block; max-width: 200px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; }
         .navigasi-bawah { display: flex; justify-content: space-between; margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; }
         .btn-nav { padding: 10px 20px; font-size: 16px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; color: white; }
-        .btn-prev { background-color: #6c757d; }
-        .btn-next { background-color: #007bff; }
-        .btn-selesai { background-color: #dc3545; }
     </style>
 </head>
 <body>
 
     <div id="halaman-login" class="kotak kotak-login">
         <h2>LOGIN CBT SMK</h2>
-        <p>Silakan pilih mata pelajaran</p>
-        
         <select id="mapel">
             <option value="Informatika">Informatika</option>
             <option value="Broadcasting">Dasar Broadcasting & Perfilman</option>
             <option value="Coding">Coding & Artificial Intelligence</option>
         </select>
-
-        <input type="text" id="nis" placeholder="Masukkan NIS" autocomplete="off">
-        <input type="text" id="token" placeholder="Token Ujian" autocomplete="off">
+        <input type="text" id="nis" placeholder="Masukkan NIS">
+        <input type="text" id="token" placeholder="Token Ujian">
         <button class="btn-utama" onclick="prosesLogin()">MASUK UJIAN</button>
         <p id="pesan"></p>
     </div>
@@ -58,231 +45,129 @@
             </div>
             <div class="timer" id="waktu-ujian">60:00</div>
         </div>
-        <div id="area-soal"><i>Sedang mengunduh soal... Mohon tunggu.</i></div>
+        <div id="area-soal"></div>
         <div id="area-navigasi" class="navigasi-bawah" style="display: none;">
-            <button id="btn-prev" class="btn-nav btn-prev" onclick="gantiSoal(-1)">Pilih Sebelumnya</button>
-            <button id="btn-next" class="btn-nav btn-next" onclick="gantiSoal(1)">Pilih Selanjutnya</button>
+            <button id="btn-prev" class="btn-nav" style="background:#6c757d" onclick="gantiSoal(-1)">Kembali</button>
+            <button id="btn-next" class="btn-nav" style="background:#007bff">Selanjutnya</button>
         </div>
     </div>
 
     <script>
-        // ================= PENGATURAN JADWAL UJIAN =================
+        const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
+        
+        // Konfigurasi Jadwal
         const jadwalUjian = {
-            "Informatika": { buka: "07:30", tutup: "20:45" },
+            "Informatika": { buka: "07:30", tutup: "23:59" },
             "Broadcasting": { buka: "08:45", tutup: "23:59" },
             "Coding": { buka: "10:00", tutup: "23:59" }
         };
 
-        // ================= SISTEM KEAMANAN SUPER KETAT =================
-        let jumlahPelanggaran = 0; 
+        let bankSoal = [], indexSoalSaatIni = 0, jawabanSiswa = {}, nisSiswaAktif = "", mapelAktif = "", durasiUjian = 3600, timerInterval, jumlahPelanggaran = 0;
 
-        // Matikan Klik Kanan & Copy/Paste
-        document.addEventListener('contextmenu', event => { event.preventDefault(); alert("Sistem Keamanan: Dilarang klik kanan!"); });
-        document.addEventListener('copy', event => { event.preventDefault(); alert("Sistem Keamanan: Dilarang menyalin soal!"); });
-        
-        // FUNGSI TILANG & RESET INSTAN
+        // Anti-Cheat: Reset instan
         function eksekusiTilang() {
             if (document.getElementById("halaman-ujian").style.display === "block" && jumlahPelanggaran >= 0) {
-                jumlahPelanggaran++; 
-                
+                jumlahPelanggaran++;
                 if (jumlahPelanggaran < 3) {
-                    alert(`⚠️ PERINGATAN PELANGGARAN (${jumlahPelanggaran}/3) ⚠️\n\nSistem mendeteksi Anda keluar dari area ujian (pindah tab / menggunakan layar belah / membuka aplikasi lain).\n\nJika mencapai 3 kali, ujian langsung DIBATALKAN!`);
+                    alert(`Peringatan Pelanggaran (${jumlahPelanggaran}/3)!`);
                 } else {
-                    alert("⛔ PELANGGARAN MAKSIMAL (3/3) ⛔\n\nAnda telah terdeteksi melakukan kecurangan sebanyak 3 kali. Sistem membatalkan ujian Anda secara otomatis!");
-                    
-                    // JALUR KILAT: Langsung pindah layar tanpa loading (Reload)
-                    clearInterval(timerInterval); // Matikan timer ujian
-                    document.getElementById("halaman-ujian").style.display = "none"; // Sembunyikan soal
-                    document.getElementById("halaman-login").style.display = "block"; // Munculkan login
-                    
-                    // Bersihkan form & beri pesan merah
-                    document.getElementById("nis").value = "";
-                    document.getElementById("token").value = "";
-                    document.getElementById("pesan").style.color = "red";
-                    document.getElementById("pesan").innerText = "Ujian dibatalkan karena kecurangan maksimal (3x).";
-                    
-                    // Reset memori jawaban & timer agar mulai dari 0 lagi kalau login
-                    jumlahPelanggaran = 0;
-                    jawabanSiswa = {};
-                    durasiUjian = 60 * 60; 
+                    alert("Pelanggaran Maksimal! Ujian dibatalkan otomatis.");
+                    resetKeLogin("Ujian dibatalkan (3x Keluar).");
                 }
             }
         }
+        window.addEventListener("blur", eksekusiTilang);
 
-        // Sensor 1: Pindah Tab
-        document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState === 'hidden') { eksekusiTilang(); }
-        });
-
-        // Sensor 2: Layar Belah / Kehilangan Fokus Layar
-        window.addEventListener("blur", () => {
-            eksekusiTilang();
-        });
-
-
-        // ================= LOGIKA UJIAN & API =================
-        const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
-
-        let bankSoal = []; let indexSoalSaatIni = 0; let jawabanSiswa = {}; 
-        let nisSiswaAktif = ""; let mapelAktif = ""; 
-        let durasiUjian = 60 * 60; 
-        let timerInterval;
+        function resetKeLogin(pesanError) {
+            clearInterval(timerInterval);
+            document.getElementById("halaman-ujian").style.display = "none";
+            document.getElementById("halaman-login").style.display = "block";
+            document.getElementById("nis").value = "";
+            document.getElementById("token").value = "";
+            document.getElementById("pesan").style.color = "red";
+            document.getElementById("pesan").innerText = pesanError;
+            // Reset Data
+            jumlahPelanggaran = 0; jawabanSiswa = {}; durasiUjian = 3600;
+        }
 
         function prosesLogin() {
-            let nis = document.getElementById("nis").value;
-            let token = document.getElementById("token").value;
-            let mapel = document.getElementById("mapel").value;
+            let nis = document.getElementById("nis").value, token = document.getElementById("token").value, mapel = document.getElementById("mapel").value;
             let pesan = document.getElementById("pesan");
-
-            if(nis === "" || token === "") { pesan.style.color = "red"; pesan.innerText = "NIS & Token wajib diisi!"; return; }
-
-            // Cek Jadwal
-            let waktuSekarang = new Date();
-            let jam = waktuSekarang.getHours().toString().padStart(2, '0');
-            let menit = waktuSekarang.getMinutes().toString().padStart(2, '0');
-            let jamSekarangFormat = jam + ":" + menit; 
-
-            let jadwal = jadwalUjian[mapel];
-            if(jadwal) {
-                if(jamSekarangFormat < jadwal.buka) {
-                    pesan.style.color = "red"; pesan.innerText = `Ujian ${mapel} baru dibuka pukul ${jadwal.buka} WIB!`; return; 
-                }
-                if(jamSekarangFormat > jadwal.tutup) {
-                    pesan.style.color = "red"; pesan.innerText = `Ujian ${mapel} sudah ditutup pukul ${jadwal.tutup} WIB!`; return; 
-                }
-            }
-
-            pesan.style.color = "blue"; pesan.innerText = "Memverifikasi data...";
-
-            fetch(URL_API + "?action=login&nis=" + nis + "&token=" + token + "&mapel=" + mapel, { method: 'GET', redirect: 'follow' })
-            .then(res => res.json())
-            .then(data => {
-                if(data.status === "sukses") {
-                    pesan.style.color = "green"; pesan.innerText = "Berhasil masuk!";
-                    nisSiswaAktif = nis; mapelAktif = mapel;
-                    jumlahPelanggaran = 0; // Reset pelanggaran saat sukses login
-                    durasiUjian = 60 * 60; // Pastikan durasi mulai 60 menit lagi
-                    setTimeout(() => { bukaUjian(data.data.nama, data.data.kelas, mapel); }, 1000);
-                } else {
-                    pesan.style.color = "red"; pesan.innerText = data.pesan;
-                }
-            }).catch(err => { pesan.style.color = "red"; pesan.innerText = "Error koneksi server."; });
-        }
-
-        function bukaUjian(nama, kelas, mapel) {
-            document.getElementById("halaman-login").style.display = "none";
-            document.getElementById("halaman-ujian").style.display = "block";
-            document.getElementById("info-siswa").innerText = `Siswa: ${nama} (${kelas})`;
-            document.getElementById("judul-mapel").innerText = `UJIAN ${mapel.toUpperCase()}`;
             
-            jalankanTimer(); 
-            tarikDataSoal();
-        }
-
-        function jalankanTimer() {
-            let elemenWaktu = document.getElementById("waktu-ujian");
-            // Kembalikan ke warna asli tiap kali jalan
-            elemenWaktu.style.backgroundColor = "#ffeeba"; 
-            elemenWaktu.style.color = "#dc3545";
-
-            timerInterval = setInterval(() => {
-                durasiUjian--;
-                let menitTampil = Math.floor(durasiUjian / 60);
-                let detikTampil = durasiUjian % 60;
-                elemenWaktu.innerText = `${menitTampil.toString().padStart(2, '0')}:${detikTampil.toString().padStart(2, '0')}`;
-                
-                if(durasiUjian === 300) {
-                    elemenWaktu.style.backgroundColor = "#ffc107"; elemenWaktu.style.color = "#000";
-                    alert("Waktu ujian tersisa 5 MENIT lagi!");
-                }
-                if(durasiUjian <= 0) {
-                    clearInterval(timerInterval);
-                    elemenWaktu.innerText = "HABIS";
-                    alert("WAKTU UJIAN HABIS! Sistem akan menyimpan jawaban otomatis.");
-                    kirimJawabanKeServer();
-                }
-            }, 1000);
-        }
-
-        function tarikDataSoal() {
-            fetch(URL_API + "?action=getSoal&mapel=" + mapelAktif, { method: 'GET', redirect: 'follow' })
-            .then(res => res.json())
-            .then(data => {
-                if(data.status === "sukses" && data.data.length > 0) {
-                    bankSoal = data.data; document.getElementById("area-navigasi").style.display = "flex"; tampilkanSoal(0); 
-                } else {
-                    document.getElementById("area-soal").innerHTML = "Gagal memuat soal. " + data.pesan;
-                }
-            }).catch(err => { document.getElementById("area-soal").innerHTML = "Gagal menghubungi server."; });
-        }
-
-        function tampilkanSoal(index) {
-            let soal = bankSoal[index]; let nomorSoal = index + 1;
-            let jawabanTersimpan = jawabanSiswa[soal.id_soal] || "";
-            let tagGambar = (soal.link_gambar && soal.link_gambar.trim() !== "") ? `<img src="${soal.link_gambar}" alt="Gambar Soal" style="max-width: 100%; border-radius: 5px; margin-bottom: 15px;">` : "";
-
-            let htmlSoal = `
-                <div style="margin-bottom: 20px;"><span style="background: #007bff; color: white; padding: 3px 10px; border-radius: 15px; font-weight: bold; font-size: 14px;">SOAL NO. ${nomorSoal}</span></div>
-                ${tagGambar}
-                <p style="font-size: 18px; font-weight: bold; margin-bottom: 20px;">${soal.pertanyaan}</p>
-                <div style="text-align: left;">
-                    <label class="opsi-jawaban"><input type="radio" name="opsi" value="A" onchange="simpanJawaban('${soal.id_soal}', 'A')" ${jawabanTersimpan === 'A' ? 'checked' : ''}> <b>A.</b> ${soal.pil_a}</label>
-                    <label class="opsi-jawaban"><input type="radio" name="opsi" value="B" onchange="simpanJawaban('${soal.id_soal}', 'B')" ${jawabanTersimpan === 'B' ? 'checked' : ''}> <b>B.</b> ${soal.pil_b}</label>
-                    <label class="opsi-jawaban"><input type="radio" name="opsi" value="C" onchange="simpanJawaban('${soal.id_soal}', 'C')" ${jawabanTersimpan === 'C' ? 'checked' : ''}> <b>C.</b> ${soal.pil_c}</label>
-                    <label class="opsi-jawaban"><input type="radio" name="opsi" value="D" onchange="simpanJawaban('${soal.id_soal}', 'D')" ${jawabanTersimpan === 'D' ? 'checked' : ''}> <b>D.</b> ${soal.pil_d}</label>
-                    <label class="opsi-jawaban"><input type="radio" name="opsi" value="E" onchange="simpanJawaban('${soal.id_soal}', 'E')" ${jawabanTersimpan === 'E' ? 'checked' : ''}> <b>E.</b> ${soal.pil_e}</label>
-                </div>
-            `;
-            document.getElementById("area-soal").innerHTML = htmlSoal;
-            let btnPrev = document.getElementById("btn-prev"); let btnNext = document.getElementById("btn-next");
-            btnPrev.style.visibility = (index === 0) ? "hidden" : "visible";
-
-            if(index === bankSoal.length - 1) {
-                btnNext.innerText = "SELESAI UJIAN"; btnNext.className = "btn-nav btn-selesai"; btnNext.onclick = konfirmasiSelesai;
-            } else {
-                btnNext.innerText = "Selanjutnya >"; btnNext.className = "btn-nav btn-next"; btnNext.onclick = function() { gantiSoal(1) };
+            // Cek Jadwal
+            let now = new Date();
+            let jamSkrg = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
+            if(jadwalUjian[mapel] && (jamSkrg < jadwalUjian[mapel].buka || jamSkrg > jadwalUjian[mapel].tutup)) {
+                pesan.innerText = `Jadwal ${mapel}: ${jadwalUjian[mapel].buka} - ${jadwalUjian[mapel].tutup}`;
+                return;
             }
-        }
 
-        function gantiSoal(arah) { indexSoalSaatIni += arah; tampilkanSoal(indexSoalSaatIni); }
-        function simpanJawaban(idSoal, pilihan) { jawabanSiswa[idSoal] = pilihan; }
-
-        function konfirmasiSelesai() {
-            let totalDijawab = Object.keys(jawabanSiswa).length;
-            if(confirm(`Anda sudah menjawab ${totalDijawab} dari ${bankSoal.length} soal.\n\nYakin ingin mengakhiri dan mengirim jawaban?`)) {
-                clearInterval(timerInterval); kirimJawabanKeServer();
-            }
-        }
-
-        function kirimJawabanKeServer() {
-            let btnSelesai = document.getElementById("btn-next");
-            if(btnSelesai) { btnSelesai.innerText = "Mengirim..."; btnSelesai.disabled = true; }
-
-            jumlahPelanggaran = -999; // Matikan sensor tilang agar aman
-
-            let jawabanBentukTeks = encodeURIComponent(JSON.stringify(jawabanSiswa));
-
-            fetch(URL_API + "?action=submit&nis=" + nisSiswaAktif + "&mapel=" + mapelAktif + "&jawaban=" + jawabanBentukTeks, { method: 'GET', redirect: 'follow' })
-            .then(res => res.json())
-            .then(data => {
-                if(data.status === "sukses") {
-                    document.getElementById("area-soal").innerHTML = `
-                        <div style="text-align:center; padding: 40px 0;">
-                            <h2 style="color: #28a745;">UJIAN SELESAI</h2>
-                            <p>Jawaban mapel <b>${mapelAktif}</b> berhasil tersimpan.</p>
-                        </div>
-                    `;
-                    document.getElementById("area-navigasi").style.display = "none";
-                    document.getElementById("waktu-ujian").innerText = "SELESAI";
-                } else {
-                    alert("Gagal menyimpan: " + data.pesan); if(btnSelesai) { btnSelesai.innerText = "SELESAI UJIAN"; btnSelesai.disabled = false; }
-                    jumlahPelanggaran = 0; 
-                }
-            }).catch(err => {
-                alert("Terjadi kesalahan koneksi."); if(btnSelesai) { btnSelesai.innerText = "SELESAI UJIAN"; btnSelesai.disabled = false; }
-                jumlahPelanggaran = 0; 
+            pesan.style.color = "blue"; pesan.innerText = "Verifikasi...";
+            fetch(`${URL_API}?action=login&nis=${nis}&token=${token}&mapel=${mapel}`).then(r => r.json()).then(d => {
+                if(d.status === "sukses") {
+                    nisSiswaAktif = nis; mapelAktif = mapel;
+                    document.getElementById("halaman-login").style.display = "none";
+                    document.getElementById("halaman-ujian").style.display = "block";
+                    document.getElementById("info-siswa").innerText = `Siswa: ${d.data.nama}`;
+                    document.getElementById("judul-mapel").innerText = "UJIAN " + mapel.toUpperCase();
+                    mulaiUjian();
+                } else { pesan.style.color = "red"; pesan.innerText = d.pesan; }
             });
         }
+
+        function mulaiUjian() {
+            timerInterval = setInterval(() => {
+                durasiUjian--;
+                let m = Math.floor(durasiUjian/60), s = durasiUjian%60;
+                document.getElementById("waktu-ujian").innerText = `${m}:${s.toString().padStart(2,'0')}`;
+                if(durasiUjian<=0) { clearInterval(timerInterval); kirimJawaban(); }
+            }, 1000);
+            fetch(`${URL_API}?action=getSoal&mapel=${mapelAktif}`).then(r => r.json()).then(d => {
+                bankSoal = d.data; document.getElementById("area-navigasi").style.display = "flex"; tampilkanSoal(0);
+            });
+        }
+
+        function tampilkanSoal(idx) {
+            indexSoalSaatIni = idx;
+            let s = bankSoal[idx], j = jawabanSiswa[s.id_soal] || "";
+            let imgQ = s.link_gambar ? `<img src="${s.link_gambar}" style="max-width:100%; margin-bottom:15px;">` : "";
+            const renderOpsi = (label, teks, img) => `
+                <label class="opsi-jawaban">
+                    <input type="radio" name="q" onchange="jawabanSiswa['${s.id_soal}']='${label}'" ${j===label?'checked':''}> 
+                    <b>${label}.</b> ${teks}
+                    ${img ? `<img src="${img}" class="img-opsi">` : ""}
+                </label>`;
+            document.getElementById("area-soal").innerHTML = `
+                ${imgQ} <p><b>${idx+1}. ${s.pertanyaan}</b></p>
+                ${renderOpsi('A', s.pil_a, s.img_a)} ${renderOpsi('B', s.pil_b, s.img_b)}
+                ${renderOpsi('C', s.pil_c, s.img_c)} ${renderOpsi('D', s.pil_d, s.img_d)}
+                ${renderOpsi('E', s.pil_e, s.img_e)}
+            `;
+            let btn = document.getElementById("btn-next");
+            btn.innerText = idx === bankSoal.length-1 ? "SELESAI" : "Selanjutnya";
+            btn.style.background = idx === bankSoal.length-1 ? "#dc3545" : "#007bff";
+            btn.onclick = idx === bankSoal.length-1 ? konfirmasiSelesai : () => tampilkanSoal(idx+1);
+        }
+
+        function konfirmasiSelesai() { 
+            if(confirm("Apakah Anda yakin ingin mengakhiri ujian dan mengirim jawaban?")) { 
+                clearInterval(timerInterval); 
+                kirimJawaban(); 
+            } 
+        }
+
+        function kirimJawaban() {
+            jumlahPelanggaran = -999; // Matikan sensor saat kirim
+            document.getElementById("area-soal").innerHTML = "<h2>Sedang menyimpan nilai...</h2>";
+            fetch(`${URL_API}?action=submit&nis=${nisSiswaAktif}&mapel=${mapelAktif}&jawaban=${encodeURIComponent(JSON.stringify(jawabanSiswa))}`)
+            .then(() => { 
+                alert("Jawaban Berhasil Terkirim!");
+                resetKeLogin("Ujian sebelumnya sukses disimpan.");
+                document.getElementById("pesan").style.color = "green";
+            });
+        }
+
+        function gantiSoal(arah) { if(bankSoal[indexSoalSaatIni+arah]) tampilkanSoal(indexSoalSaatIni+arah); }
     </script>
 </body>
 </html>

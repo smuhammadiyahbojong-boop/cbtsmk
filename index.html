@@ -28,6 +28,7 @@
         <h2>LOGIN CBT SMK</h2>
         <select id="mapel">
             <option value="Bahasa Indonesia">Bahasa Indonesia</option>
+</option>
         </select>
         <input type="text" id="nis" placeholder="Masukkan Username">
         <input type="text" id="token" placeholder="Token Ujian">
@@ -53,10 +54,9 @@
     <script>
         const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
         
+        // PENGATURAN JADWAL UJIAN
         const jadwalUjian = {
-            "Bahasa Indonesia": { buka: "07:30", tutup: "23:59" },
-            "Broadcasting": { buka: "08:45", tutup: "23:59" },
-            "Coding": { buka: "10:00", tutup: "23:59" }
+            "Bahasa Indonesia": { tanggal: "2026-03-09", buka: "07:30", tutup: "23:59" },
         };
 
         let bankSoal = [], indexSoalSaatIni = 0, jawabanSiswa = {}, nisSiswaAktif = "", mapelAktif = "", durasiUjian = 3600, timerInterval, jumlahPelanggaran = 0;
@@ -88,14 +88,18 @@
         function prosesLogin() {
             let nis = document.getElementById("nis").value, token = document.getElementById("token").value, mapel = document.getElementById("mapel").value;
             let pesan = document.getElementById("pesan");
-            let now = new Date(), jamSkrg = now.getHours().toString().padStart(2,'0') + ":" + now.getMinutes().toString().padStart(2,'0');
             
-            if(jadwalUjian[mapel] && (jamSkrg < jadwalUjian[mapel].buka || jamSkrg > jadwalUjian[mapel].tutup)) {
-                pesan.innerText = `Jadwal ${mapel}: ${jadwalUjian[mapel].buka} - ${jadwalUjian[mapel].tutup}`;
-                return;
-            }
+            let sekarang = new Date();
+            let tglSkrg = sekarang.getFullYear() + "-" + (sekarang.getMonth() + 1).toString().padStart(2, '0') + "-" + sekarang.getDate().toString().padStart(2, '0');
+            let jamSkrg = sekarang.getHours().toString().padStart(2, '0') + ":" + sekarang.getMinutes().toString().padStart(2, '0');
+            let jadwal = jadwalUjian[mapel];
 
-            pesan.style.color = "blue"; pesan.innerText = "Verifikasi...";
+            // Proteksi Jadwal
+            if (tglSkrg !== jadwal.tanggal) { pesan.style.color = "red"; pesan.innerText = `❌ Ujian dijadwalkan tanggal ${jadwal.tanggal}`; return; }
+            if (jamSkrg < jadwal.buka) { pesan.style.color = "orange"; pesan.innerText = `⏳ Belum dibuka! Mulai pukul ${jadwal.buka}`; return; }
+            if (jamSkrg > jadwal.tutup) { pesan.style.color = "red"; pesan.innerText = `🚫 Waktu pendaftaran habis pukul ${jadwal.tutup}`; return; }
+
+            pesan.style.color = "blue"; pesan.innerText = "Verifikasi akses...";
             fetch(`${URL_API}?action=login&nis=${nis}&token=${token}&mapel=${mapel}`).then(r => r.json()).then(d => {
                 if(d.status === "sukses") {
                     nisSiswaAktif = nis; mapelAktif = mapel;
@@ -104,7 +108,7 @@
                     document.getElementById("info-siswa").innerText = `Siswa: ${d.data.nama}`;
                     document.getElementById("judul-mapel").innerText = "UJIAN " + mapel.toUpperCase();
                     mulaiUjian();
-                } else { pesan.style.color = "red"; pesan.innerText = d.pesan; }
+                } else { pesan.style.color = "red"; pesan.innerText = "Akses Ditolak! Cek Token atau Administrasi."; }
             });
         }
 
@@ -153,14 +157,11 @@
             let belumDijawab = [];
             bankSoal.forEach((soal) => {
                 let id = soal.id_soal.toString();
-                if (!jawabanSiswa[id]) {
-                    // MENGGUNAKAN ID SOAL ASLI DARI GOOGLE SHEETS
-                    belumDijawab.push(id); 
-                }
+                if (!jawabanSiswa[id]) { belumDijawab.push(id); }
             });
 
             if (belumDijawab.length > 0) {
-                alert(`⚠️ BELUM LENGKAP!\n\nMasih ada ${belumDijawab.length} soal yang belum dijawab.\nNomor Soal: ${belumDijawab.join(", ")}\n\nSilakan cek kembali.`);
+                alert(`⚠️ BELUM LENGKAP!\n\nMasih ada ${belumDijawab.length} soal yang belum dijawab.\nID Soal: ${belumDijawab.join(", ")}\n\nSilakan cek kembali.`);
                 setTimeout(() => { jumlahPelanggaran = backupTilang; }, 500);
             } else {
                 if (confirm("Yakin ingin mengirim jawaban sekarang?")) { 

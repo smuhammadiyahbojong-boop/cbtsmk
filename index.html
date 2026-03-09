@@ -102,7 +102,7 @@
             let jadwal = jadwalUjian[mapel];
 
             // Proteksi Jadwal
-            if (tglSkrg !== jadwal.tanggal) { pesan.style.color = "red"; pesan.innerText = `❌ Ujian dijadwalkan tanggal ${jadwal.tanggal}`; return; }
+            if (tglSkrg !== jadwal.tanggal) { pesan.style.color = "red"; pesan.innerText = `❌ Ujian Susulan dijadwalkan tanggal ${jadwal.tanggal}`; return; }
             if (jamSkrg < jadwal.buka) { pesan.style.color = "orange"; pesan.innerText = `⏳ Belum dibuka! Mulai pukul ${jadwal.buka}`; return; }
             if (jamSkrg > jadwal.tutup) { pesan.style.color = "red"; pesan.innerText = `🚫 Waktu pendaftaran habis pukul ${jadwal.tutup}`; return; }
 

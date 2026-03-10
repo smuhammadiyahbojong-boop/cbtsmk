@@ -13,7 +13,6 @@
         .kotak-login { max-width: 350px; text-align: center; }
         input[type="text"], select { box-sizing: border-box; width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
         
-        /* GAYA NOTIFIKASI ERROR */
         .error-msg { color: #dc3545; font-size: 14px; margin-bottom: 10px; font-weight: bold; display: none; }
         
         .btn-utama { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
@@ -71,6 +70,7 @@
     </div>
 
     <script>
+        // PASTI KAN URL INI ADALAH HASIL DEPLOY TERBARU APPS SCRIPT ANDA
         const URL_API = "https://script.google.com/macros/s/AKfycbzAkFQPW7JWlN68BT4NJIAXxKGEkfGmPpCPI_aAJZx4a7G-vuOWECKk113L3ubMT9lB/exec";
         
         const jadwalUjian = {
@@ -112,13 +112,7 @@
 
         function resetKeLogin(pesanError) {
             clearInterval(timerInterval);
-            document.getElementById("halaman-ujian").style.display = "none";
-            document.getElementById("halaman-login").style.display = "block";
-            document.getElementById("nis").value = "";
-            document.getElementById("token").value = "";
-            document.getElementById("pesan").style.color = "red";
-            document.getElementById("pesan").innerText = pesanError;
-            jumlahPelanggaran = 0; jawabanSiswa = {}; durasiUjian = 3600;
+            location.reload(); 
         }
 
         function prosesLogin() {
@@ -145,7 +139,8 @@
                     mulaiUjian();
                 } else { 
                     pesan.innerText = "";
-                    errorDiv.style.display = "block"; // TAMPILKAN ERROR MERAH
+                    errorDiv.innerText = "⚠️ " + (d.pesan || "Akses Ditolak!");
+                    errorDiv.style.display = "block";
                 }
             });
         }
@@ -157,22 +152,22 @@
                 document.getElementById("waktu-ujian").innerText = `${m}:${s.toString().padStart(2,'0')}`;
                 if(durasiUjian<=0) { clearInterval(timerInterval); kirimJawaban(); }
             }, 1000);
+
             fetch(`${URL_API}?action=getSoal&mapel=${mapelAktif}`).then(r => r.json()).then(d => {
-                bankSoal = d.data; document.getElementById("area-navigasi").style.display = "flex"; tampilkanSoal(0);
+                // FITUR A: ACAK URUTAN SOAL (SHUFFLE)
+                bankSoal = d.data.sort(() => Math.random() - 0.5); 
+                document.getElementById("area-navigasi").style.display = "flex"; 
+                tampilkanSoal(0);
             });
         }
 
         function tampilkanSoal(idx) {
             indexSoalSaatIni = idx;
             let s = bankSoal[idx], j = jawabanSiswa[s.id_soal.toString()] || "";
-            const formatOpsi = (teks) => {
-                if (!teks) return "";
-                if (teks.toString().includes("http")) {
-                    return `<br><img src="${teks}" class="img-opsi">`;
-                }
-                return teks;
-            };
+            const formatOpsi = (teks) => (teks && teks.toString().includes("http")) ? `<br><img src="${teks}" class="img-opsi">` : teks;
+            
             let imgSoal = s.link_gambar ? `<img src="${s.link_gambar}" style="max-width:100%; margin-bottom:15px; border-radius:5px; border:1px solid #ddd;">` : "";
+            
             const renderBarisOpsi = (label, teks) => `
                 <label class="opsi-jawaban">
                     <input type="radio" name="q" onchange="simpanPilihan('${s.id_soal}', '${label}')" ${j===label?'checked':''}> 
@@ -204,16 +199,30 @@
                 alert(`⚠️ BELUM LENGKAP!\nNomor ID Soal kosong: ${belumDijawab.join(", ")}`);
                 setTimeout(() => { jumlahPelanggaran = backupTilang; }, 800);
             } else {
-                if (confirm("Kirim jawaban?")) { clearInterval(timerInterval); kirimJawaban(); }
+                if (confirm("Kirim jawaban sekarang?")) { kirimJawaban(); }
                 else { setTimeout(() => { jumlahPelanggaran = backupTilang; }, 800); }
             }
         }
 
         function kirimJawaban() {
+            // FITUR C: KUNCI TOMBOL (Cegah Spam Klik / Data Ganda)
+            const btnNext = document.getElementById("btn-next");
+            if(btnNext) {
+                btnNext.disabled = true;
+                btnNext.innerText = "MENGIRIM...";
+                btnNext.style.background = "#6c757d";
+            }
+
+            clearInterval(timerInterval);
             jumlahPelanggaran = -999;
-            document.getElementById("area-soal").innerHTML = "<h2>Menyimpan jawaban...</h2>";
+            document.getElementById("area-soal").innerHTML = "<h2>Menyimpan jawaban ke server... mohon tunggu.</h2>";
+            
+            // FITUR B: KIRIM JAWABAN SAJA (Pengecekan Nilai Dilakukan di Server)
             fetch(`${URL_API}?action=submit&nis=${nisSiswaAktif}&mapel=${mapelAktif}&jawaban=${encodeURIComponent(JSON.stringify(jawabanSiswa))}`)
-            .then(() => { alert("Sukses!"); resetKeLogin("Jawaban tersimpan."); });
+            .then(r => r.json()).then(res => { 
+                alert("Sukses! Jawaban Anda telah tersimpan."); 
+                location.reload(); 
+            });
         }
 
         function gantiSoal(arah) { if(bankSoal[indexSoalSaatIni+arah]) tampilkanSoal(indexSoalSaatIni+arah); }
